@@ -21,6 +21,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	prediction "github.com/koordinator-sh/koordinator/pkg/prediction/frontend"
 	"github.com/koordinator-sh/koordinator/pkg/quota-controller/profile"
 	"github.com/koordinator-sh/koordinator/pkg/slo-controller/nodemetric"
 	"github.com/koordinator-sh/koordinator/pkg/slo-controller/noderesource"
@@ -36,4 +37,5 @@ var controllerAddFuncs = map[string]func(manager.Manager) error{
 	noderesource.Name: noderesource.Add,
 	nodeslo.Name:      nodeslo.Add,
 	profile.Name:      profile.Add,
+	prediction.Name:   prediction.Add,
 }
