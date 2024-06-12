@@ -28,6 +28,10 @@ type FakeAnalysisV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeAnalysisV1alpha1) Checkpoints(namespace string) v1alpha1.CheckpointInterface {
+	return &FakeCheckpoints{c, namespace}
+}
+
 func (c *FakeAnalysisV1alpha1) Recommendations(namespace string) v1alpha1.RecommendationInterface {
 	return &FakeRecommendations{c, namespace}
 }
