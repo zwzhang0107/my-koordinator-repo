@@ -18,6 +18,9 @@ package model
 
 import (
 	"fmt"
+	"math"
+	"time"
+
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/apis"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/checkpoint"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/metricscollector"
@@ -26,8 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"math"
-	"time"
 )
 
 type ModelKey interface {
@@ -36,16 +37,17 @@ type ModelKey interface {
 
 type Model interface {
 	ModelKey
-	LoadHistoryIfNecessary(snapshot checkpoint.Snapshot) (bool, error)
+	checkpoint.Snapshot
 }
 
 type MetricDistributionModel interface {
 	Model
-	Update() error
+	Update() (bool, error)
 	PrepareFeeder(f *Feeder)
 	FeedSamples() error
-	SaveSnapshot(snapshot checkpoint.Snapshot) error
 	GetDistribution(detail *apis.MetricDistribution) error
+}
+type ModelCheckpointData struct {
 }
 
 type DistributionModelBuilder struct {
@@ -94,6 +96,14 @@ func (m *metricDistributionModelImpl) PrepareFeeder(f *Feeder) {
 	m.feedSamples = f.LoadSamples
 }
 
+func (m *metricDistributionModelImpl) SaveToSnapshot() (*checkpoint.SnapshotData, error) {
+	return nil, nil
+}
+
+func (m *metricDistributionModelImpl) LoadFromSnapshot(interface{}) error {
+	return nil
+}
+
 func (m *metricDistributionModelImpl) FeedSamples() error {
 	samples, err := m.feedSamples()
 	if err != nil {
@@ -138,7 +148,13 @@ func (m *metricDistributionModelImpl) LoadHistoryIfNecessary(snapshot checkpoint
 	return false, nil
 }
 
-func (m *metricDistributionModelImpl) SaveSnapshot(snapshot checkpoint.Snapshot) error {
+func (m *metricDistributionModelImpl) SaveSnapshot() (interface{}, error) {
+
+	// TODO
+	return nil, nil
+}
+
+func (m *metricDistributionModelImpl) LoadSnapshot() error {
 	// TODO
 	return nil
 }

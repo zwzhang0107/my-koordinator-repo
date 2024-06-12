@@ -55,6 +55,7 @@ func (p *predictionMgrImpl) Run() error {
 	// start workload fetcher syncing workloads
 	// start metrics repo ready for collect metric
 	// start profiler to generate prediction result
+	go p.checkpoint.Run()
 	panic("implement me")
 }
 

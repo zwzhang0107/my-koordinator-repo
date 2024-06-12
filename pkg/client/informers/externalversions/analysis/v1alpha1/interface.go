@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// Checkpoints returns a CheckpointInformer.
+	Checkpoints() CheckpointInformer
 	// Recommendations returns a RecommendationInformer.
 	Recommendations() RecommendationInformer
 }
@@ -37,6 +39,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// Checkpoints returns a CheckpointInformer.
+func (v *version) Checkpoints() CheckpointInformer {
+	return &checkpointInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Recommendations returns a RecommendationInformer.

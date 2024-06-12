@@ -18,6 +18,14 @@ limitations under the License.
 
 package v1alpha1
 
+// CheckpointListerExpansion allows custom methods to be added to
+// CheckpointLister.
+type CheckpointListerExpansion interface{}
+
+// CheckpointNamespaceListerExpansion allows custom methods to be added to
+// CheckpointNamespaceLister.
+type CheckpointNamespaceListerExpansion interface{}
+
 // RecommendationListerExpansion allows custom methods to be added to
 // RecommendationLister.
 type RecommendationListerExpansion interface{}

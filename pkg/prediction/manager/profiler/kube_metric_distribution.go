@@ -18,6 +18,8 @@ package profiler
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/apis"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/checkpoint"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/metricscollector"
@@ -26,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"sync"
 )
 
 // KubeMetricDistribution is a profiler which generate distribution of metrics from k8s workloads
@@ -43,6 +44,9 @@ type KubeMetricDistribution struct {
 	modelsMutex        sync.RWMutex
 	distributionModels map[apis.HierarchyIdentifier]map[apis.MetricIdentifier]model.MetricDistributionModel // <id, map[metricName]model>
 }
+type distributionModelCheckpointData struct {
+	PodData map[string]map[string]*model.ModelCheckpointData `json:podData,omitempty`
+}
 
 func NewKubeMetricDistribution(key apis.ProfileKey, profileSpec *apis.PredictionProfileSpec,
 	metricsServerRepo metricscollector.MetricsServerRepository,
@@ -51,6 +55,7 @@ func NewKubeMetricDistribution(key apis.ProfileKey, profileSpec *apis.Prediction
 	return &KubeMetricDistribution{
 		key:         key,
 		profileSpec: profileSpec,
+		checkpoint:  checkpoint,
 	}, nil
 }
 
@@ -58,6 +63,71 @@ func (k *KubeMetricDistribution) Update(profileSpec *apis.PredictionProfileSpec)
 	k.profileMutex.Lock()
 	defer k.profileMutex.Unlock()
 	panic("implement me")
+}
+
+func (k *KubeMetricDistribution) Key() checkpoint.CheckpointKey {
+	return ""
+}
+
+func (k *KubeMetricDistribution) saveToCheckpoint() error {
+	// 1. aggregate model data to snapshotData
+	ckData := distributionModelCheckpointData{
+		PodData: make(map[string]map[string]*model.ModelCheckpointData),
+	}
+	for container, metricModules := range k.distributionModels {
+		for metric, modelDetail := range metricModules {
+			obj, err := modelDetail.SaveToSnapshot()
+			if err != nil {
+				klog.Warningf("faild to save sanpshot for container %s:%s:%s", k.key.Key(), container.Name, metric.Name)
+				continue
+			}
+			modelData := obj.(*model.ModelCheckpointData)
+			ckData.PodData[container.Name][metric.Name] = modelData
+		}
+	}
+	// 2. save snapshotData to checkpoint
+	snapshotData := checkpoint.SnapshotData{
+		ModelData: make(map[string]interface{}),
+		ModelArgs: make(map[string]interface{}),
+	}
+	snapshotData.ModelData["modelData"] = &ckData
+	//TODO: save modelArgs
+	err := k.checkpoint.SaveToCheckpoint(k.key.Key(), &snapshotData)
+	if err != nil {
+		klog.Errorf("faild to save to checkpoint for %s, err:%v", k.key.Key(), err)
+		return err
+	}
+
+	return nil
+}
+
+func (k *KubeMetricDistribution) loadFromCheckpoint() error {
+	// 1. get snapshotData from checkpoint by profileKey
+	snapshotData, err := k.checkpoint.LoadFromCheckpoint(k.key.Key())
+	if err != nil {
+		return err
+	}
+	// 2. parse snapshotData by model
+	ckData := snapshotData.ModelData["modelData"].(*distributionModelCheckpointData)
+	for container, metricModules := range k.distributionModels {
+		if ckData.PodData[container.Name] == nil {
+			klog.Warningf("skip loadSnapshot for %v:%s", k.key.Key(), container.Name)
+			continue
+		}
+		containerData := ckData.PodData[container.Name]
+		for metric, module := range metricModules {
+			if _, exist := containerData[metric.Name]; !exist {
+				klog.Warningf("skip loadSnapshot for %v:%s:%s", k.key.Key(), container.Name, metric.Name)
+				continue
+			}
+			err = module.LoadFromSnapshot(containerData[metric.Name])
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (k *KubeMetricDistribution) Profile() error {
@@ -76,28 +146,24 @@ func (k *KubeMetricDistribution) Profile() error {
 	}
 
 	k.refreshModels(detail)
+	// TODO: do once
+	err = k.loadFromCheckpoint()
+	if err != nil {
+		klog.Warningf("faied to load snapshot for profiler %v: %v", k.key.Key(), err)
+	}
 
 	for key, metricModels := range k.distributionModels {
 		for _, modelDetail := range metricModels {
-			if loaded, err := modelDetail.LoadHistoryIfNecessary(k.checkpoint); err != nil {
-				klog.Warningf("failed to load snapshot for model %v: %v", key, err)
-				continue
-			} else {
-				klog.V(5).Infof("history snapshot for model %v loaded: %v", key, loaded)
-			}
-
 			if err := modelDetail.FeedSamples(); err != nil {
 				klog.Warningf("failed to load latest sample for model %v: %v", key, err)
 				continue
 			}
-
-			if err := modelDetail.SaveSnapshot(k.checkpoint); err != nil {
-				klog.Warningf("failed to save snapshot for model %v: %v", key, err)
-				continue
-			}
-
 			klog.V(5).Infof("model %v: %v", key, modelDetail)
 		}
+	}
+
+	if err := k.saveToCheckpoint(); err != nil {
+		klog.Warningf("failed to save to checkpoint for profiler %v: %v", k.key.Key(), err)
 	}
 
 	return nil
