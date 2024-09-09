@@ -17,18 +17,32 @@ limitations under the License.
 package profiler
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/apis"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/checkpoint"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/metricscollector"
 	"github.com/koordinator-sh/koordinator/pkg/prediction/manager/workloadfetcher"
+	"go.etcd.io/etcd/client/v2"
 )
 
 type Factory struct {
 	metricsServerRepo   metricscollector.MetricsServerRepository
 	KubeWorkloadFetcher workloadfetcher.KubeWorkloadFetcher
 	checkpoint          checkpoint.Checkpoint
+	source              string
+}
+
+func NewFactory(client client.Client, region, provider string, period int, source string, context context.Context) Factory {
+	factory := Factory{
+		source:              source,
+		metricsServerRepo:   metricscollector.NewMetricServerRepo(client),
+		checkpoint:          checkpoint.NewCheckPoint(),
+		KubeWorkloadFetcher: workloadfetcher.NewWorkloadFetcher(context),
+	}
+	factory.metricsServerRepo.Start()
+	return factory
 }
 
 func (f *Factory) New(profile *apis.PredictionProfileSpec) (Profiler, error) {

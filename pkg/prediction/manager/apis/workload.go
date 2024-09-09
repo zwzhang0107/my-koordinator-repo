@@ -50,6 +50,8 @@ type ControllerRef struct {
 	Name string `json:"name"`
 	// API version of the referent
 	APIVersion string `json:"apiVersion,omitempty"`
+	// Group of the referent
+	Group string `json:"group"`
 	// Hierarchy indicates the hierarchy of the target for profiling
 	Hierarchy ProfileHierarchy `json:"hierarchy,omitempty"`
 }
